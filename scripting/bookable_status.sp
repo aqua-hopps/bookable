@@ -65,15 +65,32 @@ public void OnClientDisconnect(){
     SetEmptyTimer();
 }
 
-void SetEmptyTimer(){
-    if (g_playercounts <= MAX_AFK_PLAYERS && emptyTimer == INVALID_HANDLE){
-        emptyTimer = CreateTimer(30.0, UnBook, _);
+public Action SetEmptyTimer()
+{
+    if (g_playercounts <= MAX_AFK_PLAYERS && emptyTimer != null)
+    {
+        PrintToServer("Timer '%d' already active", emptyTimer);
+        return Plugin_Handled;
     }
+    if (g_playercounts <= MAX_AFK_PLAYERS && emptyTimer == null)
+    {
+        emptyTimer = CreateTimer(30.0, UnBook, _);
+        PrintToServer("Timer Starting");
+        return Plugin_Handled;
+    }
+    if (g_playercounts >= MAX_AFK_PLAYERS && emptyTimer != null)
+    {
+        delete emptyTimer;
+        PrintToServer("Enough Players, Timer deleted");
+        return Plugin_Handled;
+    }
+    return Plugin_Handled;
 }
 
 
 public Action UnBook(Handle timer){
     PrintToServer("HAHA");
+    return Plugin_Handled;
 }
 
 void CountPlayers(){
