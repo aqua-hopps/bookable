@@ -54,39 +54,33 @@ public void OnPluginStart()
 }
 
 public void OnClientConnected(){
-    //CreateTimer(2.0, EmptyTimer, _);
     g_playercounts++;
     SetEmptyTimer();
 }
 
 public void OnClientDisconnect(){
-    //CreateTimer(2.0, EmptyTimer, _);
     g_playercounts--;
     SetEmptyTimer();
 }
 
 void SetEmptyTimer()
 {
-    if (emptyTimer == INVALID_HANDLE){
-        if (g_playercounts <= MAX_AFK_PLAYERS){
-            emptyTimer = CreateTimer(10.0, UnBook, _);
+    if (emptyTimer == INVALID_HANDLE && g_playercounts <= MAX_AFK_PLAYERS){
+            emptyTimer = CreateTimer(600.0, UnBook, _);
             PrintToServer("Timer Starting");
-        }
-        else{
-            PrintToServer("Timer '%d' already active", emptyTimer);
-        }
     }
-    else if (g_playercounts > MAX_AFK_PLAYERS) {
+    else if (emptyTimer != INVALID_HANDLE && g_playercounts > MAX_AFK_PLAYERS){
         CloseHandle(emptyTimer);
-        emptyTimer = null;
+        emptyTimer = INVALID_HANDLE;
         PrintToServer("Enough Players, Timer deleted");
     }
 }
 
 
 public Action UnBook(Handle timer){
-    PrintToServer("HAHA");
-    emptyTimer = null;
+    PrintToServer("Timer Reached, Updating Empty field...");
+    emptyTimer = INVALID_HANDLE;
+    SendEmptyInfo();
     return Plugin_Stop;
 }
 
@@ -109,7 +103,7 @@ void SendEmptyInfo(){
         "UPDATE                                \
             ServerInfo                        \
         SET                                    \
-            'Empty'         =    1            \
+            Empty         =    1            \
         WHERE                                \
             Region            =    '%s'        \
         AND                                    \
