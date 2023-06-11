@@ -47,14 +47,14 @@ public void OnPluginStart(){
 	RegConsoleCmd("sm_info", Command_Info, "Get server information.");
 
 	// Create ConVars
-	g_cvar_database = CreateConVar("sm_bookable_databse", "", "Set the database keyname.");
+	g_cvar_database = CreateConVar("sm_bookable_database", "", "Set the database keyname.");
 	g_cvar_region = CreateConVar("sm_bookable_region", "", "Set the server region name.");
 	g_cvar_regionid = CreateConVar("sm_bookable_regionid", "", "Set the server region id.");
 	g_cvar_serverPassword = FindConVar("sv_password");
 	g_cvar_rconPassword = FindConVar("rcon_password");
 
 	// Set ConVar values
-	GetConVarString(g_cvar_database, g_database, sizeof(g_region));
+	GetConVarString(g_cvar_database, g_database, sizeof(g_database));
 	GetConVarString(g_cvar_region, g_region, sizeof(g_region));
 	g_regionid = GetConVarInt(g_cvar_regionid);
 
