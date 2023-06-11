@@ -16,8 +16,8 @@
 public Plugin myinfo =
 {
 	name = "AsiaFortress Bookable",
-	author = "aqua_hopps",
-	description = "My first plugin ever",
+	author = "aqua_hopps, avan",
+	description = "Used for automatic server booking managements",
 	version = "1.0",
 	url = "http://www.sourcemod.net/"
 };
