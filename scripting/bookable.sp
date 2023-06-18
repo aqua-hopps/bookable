@@ -11,22 +11,21 @@
 
 #define MAX_AFK_PLAYERS 2
 #define MAX_AFK_TIME 600.0
+#define MAX_SDR_RETRIES 4
 
 public Plugin myinfo =
 {
 	name = "AsiaFortress Bookable",
 	author = "aqua-hopps & avanavan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.11",
+	version = "1.2",
 	url = "https://github.com/aqua-hopps/asiafortress-bookable"
 };
 
 char g_dbName[NAME_LENGTH];
 char g_instanceName[NAME_LENGTH];
-
 char g_serverPassword[PASSWORD_LENGTH + 1];
 char g_rconPassword[PASSWORD_LENGTH + 1];
-
 char g_publicIP[16];
 char g_fakeIP[16];
 
@@ -47,11 +46,10 @@ Handle g_hAFKTimer;
 
 
 public void OnPluginStart(){
-	RegAdminCmd("sm_send", Command_Send, ADMFLAG_GENERIC, "Send all server information.");
 	RegAdminCmd("sm_getinfo", Command_GetInfo, ADMFLAG_GENERIC, "Print all server information.");
 	RegConsoleCmd("sm_info", Command_Info, "Print server information.");
 	RegConsoleCmd("sm_stv", Command_STV, "Print stv information.");
-	RegConsoleCmd("sm_generate", Command_Generate, "Generate new passwords for the server.");
+	RegConsoleCmd("sm_setpw", Command_SetPW, "Set new passwords for the server.");
 
 	// Create ConVars
 	g_cvarDBName = CreateConVar("sm_bookable_database", "", "Set the database keyname.");
@@ -64,9 +62,6 @@ public void OnPluginStart(){
 	g_cvarServerPassword.SetString(g_serverPassword);
 	g_cvarRconPassword.SetString(g_rconPassword);
 
-	// Set ConVar Hooks
-	HookConVarChange(g_cvarDBName, OnDatabaseChanged);
-
 	// Load gamedata
 	g_hGameConf = LoadGameConfigFile("bookable");
 
@@ -78,60 +73,33 @@ public void OnPluginStart(){
 	g_cvarDBName.GetString(g_dbName, sizeof(g_dbName));
 	g_publicPort = GetConVarInt(FindConVar("hostport"));
 	g_tvPort = GetConVarInt(FindConVar("tv_port"));
-	g_fakePort = GetFakePort(0);
 	GetPublicIP(g_publicIP, sizeof(g_publicIP));
-	GetFakeIP(g_fakeIP, sizeof(g_fakeIP));
 
-	// Check if database name is valid
-	if (!SQL_CheckConfig(g_dbName)){
-		LogError("Could not locate \"%s\" in databases.cfg.", g_dbName);
-	}
-	else {
-		Database.Connect(SendServerInfoAll, g_dbName, _);
-	}
+	// Query SDR info every 15s for MAX_SDR_RETRIES then send server info to database
+	CreateTimer(15.0, WaitForSDRInfo, 0);
 
-	// Count players
+	// Count humans in the server
 	for (int i = 1 ; i <= MaxClients; i++)
-    {       
-        if (IsClientInGame(i) && !IsFakeClient(i)){
-            g_playerCount++;
+	{
+		if (IsClientInGame(i) && !IsFakeClient(i)){
+			g_playerCount++;
 		}
-    }
+	}
+	
 	SetAFKTimer();
 }
 
-public void OnMapStart(){
-	Database.Connect(SendServerInfoAll, g_dbName, _);
-}
-
 public void OnClientConnected(){
-    g_playerCount++;
-    SetAFKTimer();
+	g_playerCount++;
+	SetAFKTimer();
 }
 
 public void OnClientDisconnect(){
-    g_playerCount--;
-    SetAFKTimer();
-}
-
-public void OnDatabaseChanged(ConVar convar, const char[] oldValue, const char[] newValue){
-	strcopy(g_dbName, sizeof(g_dbName), newValue);
-	if (!SQL_CheckConfig(g_dbName)){
-		LogError("Could not locate \"%s\" in the database config.", g_dbName);
-	}
-	else {
-		Database.Connect(SendServerInfoAll, g_dbName, _);
-	}
-}
-
-public Action Command_Send(int client, int args){
-	Database.Connect(SendServerInfoAll, g_dbName, _);
-	PrintToChat(client, "Manually sent server info to database.");
-	return Plugin_Handled;
+	g_playerCount--;
+	SetAFKTimer();
 }
 
 public Action Command_GetInfo(int client, int args){
-	// Output plugin information
 	PrintToChat(client,"SDR IP:		%s:%d",	g_fakeIP, g_fakePort);
 	PrintToChat(client,"SDR STV:	%s:%d",	g_fakeIP, g_fakePort + 1);
 	PrintToChat(client,"IP:			%s:%d",	g_publicIP, g_publicPort);
@@ -142,7 +110,6 @@ public Action Command_GetInfo(int client, int args){
 }
 
 public Action Command_Info(int client, int args){
-	// Output plugin information
 	PrintToChatAll("SDR IP:		%s:%d",	g_fakeIP, g_fakePort);
 	PrintToChatAll("Non-SDR:	%s:%d",	g_publicIP, g_publicPort);
 	PrintToChatAll("Password:	%s",	g_serverPassword);	
@@ -150,39 +117,98 @@ public Action Command_Info(int client, int args){
 }
 
 public Action Command_STV(int client, int args){
-	// Output plugin information
 	PrintToChatAll("SDR STV:	%s:%d",	g_fakeIP, g_fakePort + 1);
 	PrintToChatAll("Non-SDR:	%s:%d",	g_publicIP, g_tvPort);
 	return Plugin_Handled;
 }
 
-public Action Command_Generate(int client, int args){
-
-	// Get random passwords
+public Action Command_SetPW(int client, int args){
+	// Set random passwords
 	GetRandomString(g_serverPassword, PASSWORD_LENGTH);
 	GetRandomString(g_rconPassword, PASSWORD_LENGTH);
-
-	// Set server passwords
 	g_cvarServerPassword.SetString(g_serverPassword);
 	g_cvarRconPassword.SetString(g_rconPassword);
 
+	// Send new passwords to the database
 	Database.Connect(SendServerPasswords, g_dbName, _);
 
+	// Output plugin information
 	PrintToChatAll("New Password: %s", g_serverPassword);
 
 	return Plugin_Handled;
 }
 
+public Action WaitForSDRInfo(Handle timer, int retry){
+	if (g_adrFakeIP && g_adrFakePorts){
+		GetFakeIP(g_fakeIP, sizeof(g_fakeIP));
+		g_fakePort = GetFakePort(0);
+
+		// Check if keyname is in databases.cfg
+		if (!SQL_CheckConfig(g_dbName)){
+			ThrowError("Could not locate \"%s\" in databases.cfg.", g_dbName);
+		}
+		else {
+			Database.Connect(SendServerInfoAll, g_dbName, _);
+		}
+		
+		return Plugin_Stop;
+	}
+	else if (retry == MAX_SDR_RETRIES){
+		// Check if keyname is in databases.cfg
+		if (!SQL_CheckConfig(g_dbName)){
+			ThrowError("Could not locate \"%s\" in databases.cfg.", g_dbName);
+		}
+		else {
+			Database.Connect(SendServerInfoAll, g_dbName, _);
+		}
+		
+		return Plugin_Stop;
+	}
+	else{
+		retry++;
+		return Plugin_Continue;
+	}
+}
+
 public Action OnServerEmpty(Handle timer){
 	Database.Connect(SendServerInfoEmpty, g_dbName, _);
-	g_hAFKTimer = INVALID_HANDLE;
+	g_hAFKTimer = INVALID_HANDLE; // Destroy timer
 	return Plugin_Stop;
+}
+
+public void SendServerInfoAll(Database db, const char[] error, any data){
+	if (db == null){
+		LogError("Could not connect to the database: %s", error);
+	}
+	else{
+		// Check if the server is a GCP instance
+		char buffer[256];
+		db.Format(buffer, sizeof(buffer), "SELECT instance_name FROM ServerInfo WHERE `Server IP` = '%s';", g_publicIP);
+		db.Query(T_SendServerInfoAll, buffer, _);
+	}
+}
+
+public void SendServerInfoEmpty(Database db, const char[] error, any data){
+	if (db == null){
+		LogError("Could not connect to the database: %s", error);
+	}
+	else{
+		char buffer[256];
+		if (g_instanceName[0] == '\0'){
+			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1	\
+				WHERE `Server IP` = '%s' AND `Server Port` = '%d' ;", g_publicIP, g_publicPort);
+		}
+		else {
+			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1 WHERE `instance_name` = '%s' ;", g_instanceName);
+		}
+		db.Query(T_SendServerInfo, buffer, _);
+	}
 }
 
 public void SendServerPasswords(Database db, const char[] error, any data){
 	if (db == null){
-        LogError("Could not connect to the database: %s", error);
-    }
+		LogError("Could not connect to the database: %s", error);
+	}
 	else{
 		char buffer[256];
 		if (g_instanceName[0] == '\0'){
@@ -211,48 +237,10 @@ public void SendServerPasswords(Database db, const char[] error, any data){
 	}
 }
 
-public void SendServerInfoAll(Database db, const char[] error, any data){
-	if (db == null){
-        LogError("Could not connect to the database: %s", error);
-    }
-	else{
-		// Check if the server is an VM Instance
-		char buffer[256];
-		db.Format(buffer, sizeof(buffer), "SELECT instance_name FROM ServerInfo WHERE `Server IP` = '%s';", g_publicIP);
-		db.Query(T_SendServerInfoAll, buffer, _);
-	}
-}
-
-public void SendServerInfoEmpty(Database db, const char[] error, any data){
-	if (db == null){
-		LogError("Could not connect to the database: %s", error);
-	}
-	else{
-		char buffer[256];
-		if (g_instanceName[0] == '\0'){
-			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1	\
-				WHERE `Server IP` = '%s' AND `Server Port` = '%d' ;", g_publicIP, g_publicPort);
-		}
-		else {
-			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1 WHERE `instance_name` = '%s' ;", g_instanceName);
-		}
-		db.Query(T_SendServerInfo, buffer, _);
-	}
-}
-
-public void T_SendServerInfo(Database db, DBResultSet results, const char[] error, any data){
-	if (db == null || results == null || error[0] != '\0'){
-		LogError("Could not send server info to the database: %s", error);
-	}
-	else if (results.AffectedRows > 1){
-		ThrowError("This server has multiple entries in the database.");
-	}
-}
-
 public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] error, any data){
 	if (db == null || results == null || error[0] != '\0'){
-        LogError("Could not query the database: %s", error);
-    }
+		LogError("Could not query the database: %s", error);
+	}
 	else if (results.RowCount == 0){
 		LogError("This server has no entry in the database.");
 	}
@@ -271,6 +259,7 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 			db.Format(buffer, sizeof(buffer),
 				"UPDATE	ServerInfo					\
 				SET									\
+					`Started`		=	 1		,	\
 					`sv_password`	=	'%s'	,	\
 					`rcon_password`	=	'%s'	,	\
 					`SDR IP`		=	'%s'	,	\
@@ -286,6 +275,7 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 			db.Format(buffer, sizeof(buffer),
 				"UPDATE	ServerInfo					\
 				SET									\
+					`Started`		=	 1		,	\
 					`sv_password`	=	'%s'	,	\
 					`rcon_password`	=	'%s'	,	\
 					`SDR IP`		=	'%s'	,	\
@@ -300,6 +290,15 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 	}
 }
 
+public void T_SendServerInfo(Database db, DBResultSet results, const char[] error, any data){
+	if (db == null || results == null || error[0] != '\0'){
+		LogError("Could not send server info to the database: %s", error);
+	}
+	else if (results.AffectedRows > 1){
+		LogError("This server has multiple entries in the database.");
+	}
+}
+
 // Generate a random password
 void GetRandomString(char[] buffer, int len){
 	static char charList[] = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -307,27 +306,26 @@ void GetRandomString(char[] buffer, int len){
 	for (int i = 0; i <= len; i++){
 		// Using GetURandomInt is "safer" for random number generation
 		buffer[i] = charList[GetURandomInt() % (sizeof(charList) - 1)];
-    }
+	}
 
 	// Strings need to be null-terminated
 	buffer[len] = '\0';
 }
 
 void SetAFKTimer(){
-    if (g_playerCount < MAX_AFK_PLAYERS && g_hAFKTimer == INVALID_HANDLE){
+	if (g_playerCount < MAX_AFK_PLAYERS && g_hAFKTimer == INVALID_HANDLE){
 		// Start AFK timer when playercount is less or equal to the MAX_AFK_PLAYERS
-        g_hAFKTimer = CreateTimer(MAX_AFK_TIME, OnServerEmpty, _);
-    }
-    if (g_playerCount >= MAX_AFK_PLAYERS && g_hAFKTimer != INVALID_HANDLE){
+		g_hAFKTimer = CreateTimer(MAX_AFK_TIME, OnServerEmpty, _);
+	}
+	if (g_playerCount >= MAX_AFK_PLAYERS && g_hAFKTimer != INVALID_HANDLE){
 		// Delete timer when playercount exceeds MAX_AFK_PLAYERS
-        CloseHandle(g_hAFKTimer);
-        g_hAFKTimer = INVALID_HANDLE;
-    }
+		CloseHandle(g_hAFKTimer);
+		g_hAFKTimer = INVALID_HANDLE;
+	}
 }
 
 void GetPublicIP(char[] buffer, int size){
 	int ipaddr[4];
-
 	SteamWorks_GetPublicIP(ipaddr);
 	Format(buffer, size, "%d.%d.%d.%d", ipaddr[0], ipaddr[1], ipaddr[2], ipaddr[3]);
 }
@@ -350,6 +348,5 @@ int GetFakePort(int num) {
 	if (!g_adrFakePorts || num < 0 || num >= 2){
 		return 0;
 	}
-
 	return LoadFromAddress(g_adrFakePorts + (num * 0x2), NumberType_Int16);
 }
