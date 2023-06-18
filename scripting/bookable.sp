@@ -18,7 +18,7 @@ public Plugin myinfo =
 	name = "AsiaFortress Bookable",
 	author = "aqua-hopps & avanavan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.3",
+	version = "1.31",
 	url = "https://github.com/aqua-hopps/asiafortress-bookable"
 };
 
@@ -196,7 +196,7 @@ public void SendServerInfoAll(Database db, const char[] error, any data){
 	else{
 		// Check if the server is a GCP instance
 		char buffer[256];
-		db.Format(buffer, sizeof(buffer), "SELECT instance_name FROM ServerInfo WHERE `Server IP` = '%s';", g_publicIP);
+		db.Format(buffer, sizeof(buffer), "SELECT instance_name FROM ServerInfo WHERE `Server IP` = '%s' ;", g_publicIP);
 		db.Query(T_SendServerInfoAll, buffer, _);
 	}
 }
@@ -209,7 +209,7 @@ public void SendServerInfoEmpty(Database db, const char[] error, any data){
 		char buffer[256];
 		if (g_instanceName[0] == '\0'){
 			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1	\
-				WHERE `Server IP` = '%s' AND `Server Port` = '%d' ;", g_publicIP, g_publicPort);
+				WHERE `Server IP` = '%s' AND `Server Port` = %d ;", g_publicIP, g_publicPort);
 		}
 		else {
 			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1 WHERE `instance_name` = '%s' ;", g_instanceName);
@@ -279,7 +279,7 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 					`SDR Port`		=	 %d		,	\
 					`SourceTV port`	=	 %d			\
 				WHERE								\
-					`Server IP`	=	'%s'		\
+					`Server IP`	=		'%s'		\
 				AND									\
 					`Server Port`	=	 %d		;",	\
 				g_serverPassword, g_rconPassword, g_fakeIP, g_fakePort, g_tvPort, g_publicIP, g_publicPort);
