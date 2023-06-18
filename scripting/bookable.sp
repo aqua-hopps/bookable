@@ -11,14 +11,14 @@
 
 #define MAX_AFK_PLAYERS 2
 #define MAX_AFK_TIME 600.0
-#define MAX_SDR_RETRIES 4
+#define MAX_SDR_RETRIES 6
 
 public Plugin myinfo =
 {
 	name = "AsiaFortress Bookable",
 	author = "aqua-hopps & avanavan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.2",
+	version = "1.3",
 	url = "https://github.com/aqua-hopps/asiafortress-bookable"
 };
 
@@ -56,6 +56,9 @@ public void OnPluginStart(){
 	g_cvarServerPassword = FindConVar("sv_password");
 	g_cvarRconPassword = FindConVar("rcon_password");
 
+	// Hook database name
+	HookConVarChange(g_cvarDBName, OnDBNameChanged);
+
 	// Set random passwords
 	GetRandomString(g_serverPassword, PASSWORD_LENGTH);
 	GetRandomString(g_rconPassword, PASSWORD_LENGTH);
@@ -74,9 +77,13 @@ public void OnPluginStart(){
 	g_publicPort = GetConVarInt(FindConVar("hostport"));
 	g_tvPort = GetConVarInt(FindConVar("tv_port"));
 	GetPublicIP(g_publicIP, sizeof(g_publicIP));
+	GetFakeIP(g_fakeIP, sizeof(g_fakeIP));
+	g_fakePort = GetFakePort(0);
 
-	// Query SDR info every 15s for MAX_SDR_RETRIES then send server info to database
-	CreateTimer(15.0, WaitForSDRInfo, 0);
+	// If the plugin is manually loaded
+	if (g_dbName[0] != '\0' && SQL_CheckConfig(g_dbName)){
+		Database.Connect(SendServerInfoAll, g_dbName, _);
+	}
 
 	// Count humans in the server
 	for (int i = 1 ; i <= MaxClients; i++)
@@ -97,6 +104,12 @@ public void OnClientConnected(){
 public void OnClientDisconnect(){
 	g_playerCount--;
 	SetAFKTimer();
+}
+
+public void OnDBNameChanged(ConVar convar, const char[] oldValue, const char[] newValue){
+	strcopy(g_dbName, sizeof(g_dbName), newValue);
+	// If the plugin is loaded on server start
+	CreateTimer(10.0, WaitForSDRInfo, 0, TIMER_REPEAT);
 }
 
 public Action Command_GetInfo(int client, int args){
@@ -266,7 +279,7 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 					`SDR Port`		=	 %d		,	\
 					`SourceTV port`	=	 %d			\
 				WHERE								\
-					`Server IP``	=	'%s'		\
+					`Server IP`	=	'%s'		\
 				AND									\
 					`Server Port`	=	 %d		;",	\
 				g_serverPassword, g_rconPassword, g_fakeIP, g_fakePort, g_tvPort, g_publicIP, g_publicPort);
