@@ -17,7 +17,7 @@ public Plugin myinfo =
 	name = "AsiaFortress Bookable",
 	author = "aqua-hopps & avanavan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.1",
+	version = "1.11",
 	url = "https://github.com/aqua-hopps/asiafortress-bookable"
 };
 
@@ -314,11 +314,11 @@ void GetRandomString(char[] buffer, int len){
 }
 
 void SetAFKTimer(){
-    if (g_playerCount <= MAX_AFK_PLAYERS && g_hAFKTimer == INVALID_HANDLE){
+    if (g_playerCount < MAX_AFK_PLAYERS && g_hAFKTimer == INVALID_HANDLE){
 		// Start AFK timer when playercount is less or equal to the MAX_AFK_PLAYERS
         g_hAFKTimer = CreateTimer(MAX_AFK_TIME, OnServerEmpty, _);
     }
-    if (g_playerCount > MAX_AFK_PLAYERS && g_hAFKTimer != INVALID_HANDLE){
+    if (g_playerCount >= MAX_AFK_PLAYERS && g_hAFKTimer != INVALID_HANDLE){
 		// Delete timer when playercount exceeds MAX_AFK_PLAYERS
         CloseHandle(g_hAFKTimer);
         g_hAFKTimer = INVALID_HANDLE;
