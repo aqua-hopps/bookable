@@ -18,7 +18,7 @@ public Plugin myinfo =
 	name = "AsiaFortress Bookable",
 	author = "aqua-hopps & avanavan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.3",
+	version = "1.31",
 	url = "https://github.com/aqua-hopps/asiafortress-bookable"
 };
 
