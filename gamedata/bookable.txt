@@ -1,0 +1,37 @@
+"Games"
+{
+	"tf"
+	{
+		"Addresses"
+		{
+			"g_nFakeIP"
+			{
+				"linux"
+				{
+					"signature"	"g_nFakeIP"
+				}
+			}
+			"g_arFakePorts"
+			{
+				"linux"
+				{
+					"signature"	"g_arFakePorts"
+				}
+			}
+			
+		}
+		"Signatures"
+		{
+			"g_nFakeIP"
+			{
+				"library"	"engine"
+				"linux"		"@g_nFakeIP"
+			}
+			"g_arFakePorts"
+			{
+				"library"	"engine"
+				"linux"		"@g_arFakePorts"
+			}
+		}
+	}
+}
