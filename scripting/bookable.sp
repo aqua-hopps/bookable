@@ -11,14 +11,14 @@
 
 #define MAX_AFK_PLAYERS 2
 #define MAX_AFK_TIME 600.0
-#define MAX_SDR_RETRIES 6
+#define MAX_SDR_RETRIES 10
 
 public Plugin myinfo =
 {
 	name = "AsiaFortress Bookable",
 	author = "aqua-hopps & avanavan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.31",
+	version = "1.32",
 	url = "https://github.com/aqua-hopps/asiafortress-bookable"
 };
 
@@ -32,7 +32,7 @@ char g_fakeIP[16];
 int g_publicPort;
 int g_fakePort;
 int g_tvPort;
-int g_playerCount = 0;
+int g_playerCount;
 
 Address g_adrFakeIP;
 Address g_adrFakePorts;
@@ -84,16 +84,6 @@ public void OnPluginStart(){
 	if (g_dbName[0] != '\0' && SQL_CheckConfig(g_dbName)){
 		Database.Connect(SendServerInfoAll, g_dbName, _);
 	}
-
-	// Count humans in the server
-	for (int i = 1 ; i <= MaxClients; i++)
-	{
-		if (IsClientInGame(i) && !IsFakeClient(i)){
-			g_playerCount++;
-		}
-	}
-	
-	SetAFKTimer();
 }
 
 public void OnClientConnected(){
@@ -109,7 +99,7 @@ public void OnClientDisconnect(){
 public void OnDBNameChanged(ConVar convar, const char[] oldValue, const char[] newValue){
 	strcopy(g_dbName, sizeof(g_dbName), newValue);
 	// If the plugin is loaded on server start
-	CreateTimer(10.0, WaitForSDRInfo, 0, TIMER_REPEAT);
+	CreateTimer(5.0, WaitForSteamInfo, 0, TIMER_REPEAT);
 }
 
 public Action Command_GetInfo(int client, int args){
@@ -151,8 +141,8 @@ public Action Command_SetPW(int client, int args){
 	return Plugin_Handled;
 }
 
-public Action WaitForSDRInfo(Handle timer, int retry){
-	if (g_adrFakeIP && g_adrFakePorts){
+public Action WaitForSteamInfo(Handle timer, int retry){
+	if (g_adrFakeIP && g_adrFakePorts && GetPublicIP(g_publicIP, sizeof(g_publicIP))){
 		GetFakeIP(g_fakeIP, sizeof(g_fakeIP));
 		g_fakePort = GetFakePort(0);
 
@@ -198,6 +188,10 @@ public void SendServerInfoAll(Database db, const char[] error, any data){
 		char buffer[256];
 		db.Format(buffer, sizeof(buffer), "SELECT instance_name FROM ServerInfo WHERE `Server IP` = '%s' ;", g_publicIP);
 		db.Query(T_SendServerInfoAll, buffer, _);
+
+		// Count current players in the server
+		g_playerCount = GetPlayerCount();
+		SetAFKTimer();
 	}
 }
 
@@ -325,6 +319,16 @@ void GetRandomString(char[] buffer, int len){
 	buffer[len] = '\0';
 }
 
+int GetPlayerCount() {
+	int count = 0;
+	for (int i = 1; i <= MaxClients; i++) {
+		if (IsClientInGame(i) && !IsFakeClient(i)) {
+			count++;
+		}
+	}
+	return count;
+}
+
 void SetAFKTimer(){
 	if (g_playerCount < MAX_AFK_PLAYERS && g_hAFKTimer == INVALID_HANDLE){
 		// Start AFK timer when playercount is less or equal to the MAX_AFK_PLAYERS
@@ -337,10 +341,17 @@ void SetAFKTimer(){
 	}
 }
 
-void GetPublicIP(char[] buffer, int size){
+bool GetPublicIP(char[] buffer, int size){
 	int ipaddr[4];
 	SteamWorks_GetPublicIP(ipaddr);
-	Format(buffer, size, "%d.%d.%d.%d", ipaddr[0], ipaddr[1], ipaddr[2], ipaddr[3]);
+
+	if (ipaddr[0] != '\0'){
+		Format(buffer, size, "%d.%d.%d.%d", ipaddr[0], ipaddr[1], ipaddr[2], ipaddr[3]);
+		return true;
+	}
+	else{
+		return false;
+	}
 }
 
 void GetFakeIP(char[] buffer, int size){
