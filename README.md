@@ -1,4 +1,4 @@
-# asiafortress-bookable
+# bookable
 A plugin for sending server info to a database.
 
 ## Admin Commands
