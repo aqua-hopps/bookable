@@ -15,10 +15,10 @@
 
 public Plugin myinfo =
 {
-	name = "AsiaFortress Bookable",
-	author = "aqua-hopps & avanavan",
+	name = "Matcha Bookable",
+	author = "aqua-hopps & avan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.32",
+	version = "1.33",
 	url = "https://github.com/aqua-hopps/asiafortress-bookable"
 };
 
@@ -61,9 +61,9 @@ public void OnPluginStart(){
 
 	// Set random passwords
 	GetRandomString(g_serverPassword, PASSWORD_LENGTH);
-	GetRandomString(g_rconPassword, PASSWORD_LENGTH);
+	// GetRandomString(g_rconPassword, PASSWORD_LENGTH);
 	g_cvarServerPassword.SetString(g_serverPassword);
-	g_cvarRconPassword.SetString(g_rconPassword);
+	// g_cvarRconPassword.SetString(g_rconPassword);
 
 	// Load gamedata
 	g_hGameConf = LoadGameConfigFile("bookable");
