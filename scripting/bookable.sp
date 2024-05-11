@@ -7,7 +7,7 @@
 
 #define NAME_LENGTH 16
 #define IP_LENGTH 16
-#define PASSWORD_LENGTH 8
+#define PASSWORD_LENGTH 10
 
 #define MAX_AFK_PLAYERS 2
 #define MAX_AFK_TIME 600.0
@@ -16,10 +16,10 @@
 public Plugin myinfo =
 {
 	name = "Matcha Bookable",
-	author = "aqua-hopps & avan",
+	author = "aqua-hopps & avanavan",
 	description = "A plugin for sending server info to a database.",
-	version = "1.33",
-	url = "https://github.com/aqua-hopps/asiafortress-bookable"
+	version = "1.34",
+	url = "https://github.com/aqua-hopps/bookable"
 };
 
 char g_dbName[NAME_LENGTH];
@@ -46,11 +46,6 @@ Handle g_hAFKTimer;
 
 
 public void OnPluginStart(){
-	RegAdminCmd("sm_getinfo", Command_GetInfo, ADMFLAG_GENERIC, "Print all server information.");
-	RegConsoleCmd("sm_info", Command_Info, "Print server information.");
-	RegConsoleCmd("sm_stv", Command_STV, "Print stv information.");
-	RegConsoleCmd("sm_setpw", Command_SetPW, "Set new passwords for the server.");
-
 	// Create ConVars
 	g_cvarDBName = CreateConVar("sm_bookable_database", "", "Set the database keyname.");
 	g_cvarServerPassword = FindConVar("sv_password");
@@ -61,9 +56,9 @@ public void OnPluginStart(){
 
 	// Set random passwords
 	GetRandomString(g_serverPassword, PASSWORD_LENGTH);
-	// GetRandomString(g_rconPassword, PASSWORD_LENGTH);
+	GetRandomString(g_rconPassword, PASSWORD_LENGTH);
 	g_cvarServerPassword.SetString(g_serverPassword);
-	// g_cvarRconPassword.SetString(g_rconPassword);
+	g_cvarRconPassword.SetString(g_rconPassword);
 
 	// Load gamedata
 	g_hGameConf = LoadGameConfigFile("bookable");
@@ -100,45 +95,6 @@ public void OnDBNameChanged(ConVar convar, const char[] oldValue, const char[] n
 	strcopy(g_dbName, sizeof(g_dbName), newValue);
 	// If the plugin is loaded on server start
 	CreateTimer(5.0, WaitForSteamInfo, 0, TIMER_REPEAT);
-}
-
-public Action Command_GetInfo(int client, int args){
-	PrintToChat(client,"SDR IP:		%s:%d",	g_fakeIP, g_fakePort);
-	PrintToChat(client,"SDR STV:	%s:%d",	g_fakeIP, g_fakePort + 1);
-	PrintToChat(client,"IP:			%s:%d",	g_publicIP, g_publicPort);
-	PrintToChat(client,"STV:		%s:%d",	g_publicIP, g_tvPort);
-	PrintToChat(client,"Password:	%s",	g_serverPassword);
-	PrintToChat(client,"RCON:		%s",	g_rconPassword);	
-	return Plugin_Handled;
-}
-
-public Action Command_Info(int client, int args){
-	PrintToChatAll("SDR IP:		%s:%d",	g_fakeIP, g_fakePort);
-	PrintToChatAll("Non-SDR:	%s:%d",	g_publicIP, g_publicPort);
-	PrintToChatAll("Password:	%s",	g_serverPassword);	
-	return Plugin_Handled;
-}
-
-public Action Command_STV(int client, int args){
-	PrintToChatAll("SDR STV:	%s:%d",	g_fakeIP, g_fakePort + 1);
-	PrintToChatAll("Non-SDR:	%s:%d",	g_publicIP, g_tvPort);
-	return Plugin_Handled;
-}
-
-public Action Command_SetPW(int client, int args){
-	// Set random passwords
-	GetRandomString(g_serverPassword, PASSWORD_LENGTH);
-	GetRandomString(g_rconPassword, PASSWORD_LENGTH);
-	g_cvarServerPassword.SetString(g_serverPassword);
-	g_cvarRconPassword.SetString(g_rconPassword);
-
-	// Send new passwords to the database
-	Database.Connect(SendServerPasswords, g_dbName, _);
-
-	// Output plugin information
-	PrintToChatAll("New Password: %s", g_serverPassword);
-
-	return Plugin_Handled;
 }
 
 public Action WaitForSteamInfo(Handle timer, int retry){
@@ -186,7 +142,7 @@ public void SendServerInfoAll(Database db, const char[] error, any data){
 	else{
 		// Check if the server is a GCP instance
 		char buffer[256];
-		db.Format(buffer, sizeof(buffer), "SELECT instance_name FROM ServerInfo WHERE `Server IP` = '%s' ;", g_publicIP);
+		db.Format(buffer, sizeof(buffer), "SELECT instance_name FROM booked WHERE `ip` = '%s' ;", g_publicIP);
 		db.Query(T_SendServerInfoAll, buffer, _);
 
 		// Count current players in the server
@@ -202,11 +158,11 @@ public void SendServerInfoEmpty(Database db, const char[] error, any data){
 	else{
 		char buffer[256];
 		if (g_instanceName[0] == '\0'){
-			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1	\
-				WHERE `Server IP` = '%s' AND `Server Port` = %d ;", g_publicIP, g_publicPort);
+			db.Format(buffer, sizeof(buffer), "UPDATE booked SET `afk` = 1	\
+				WHERE `ip` = '%s' AND `port` = %d ;", g_publicIP, g_publicPort);
 		}
 		else {
-			db.Format(buffer, sizeof(buffer), "UPDATE ServerInfo SET `Empty` = 1 WHERE `instance_name` = '%s' ;", g_instanceName);
+			db.Format(buffer, sizeof(buffer), "UPDATE booked SET `afk` = 1 WHERE `instance_name` = '%s' ;", g_instanceName);
 		}
 		db.Query(T_SendServerInfo, buffer, _);
 	}
@@ -220,19 +176,19 @@ public void SendServerPasswords(Database db, const char[] error, any data){
 		char buffer[256];
 		if (g_instanceName[0] == '\0'){
 			db.Format(buffer, sizeof(buffer),
-				"UPDATE ServerInfo				\
+				"UPDATE booked				\
 				SET								\
 					`sv_password` 	= '%s'	,	\
 					`rcon_password` = '%s'		\
 				WHERE							\
-					`Server IP` 	= '%s'		\
+					`ip` 	= '%s'		\
 				AND								\
-					`Server Port`	=  %d	;",	\
+					`port`	=  %d	;",	\
 				g_serverPassword, g_rconPassword, g_publicIP, g_publicPort);
 		}
 		else {
 			db.Format(buffer, sizeof(buffer),
-				"UPDATE ServerInfo				\
+				"UPDATE booked				\
 				SET								\
 					`sv_password` 	= '%s'	,	\
 					`rcon_password` = '%s'		\
@@ -264,31 +220,29 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 
 		if (g_instanceName[0] == '\0'){
 			db.Format(buffer, sizeof(buffer),
-				"UPDATE	ServerInfo					\
+				"UPDATE	booked					\
 				SET									\
-					`Started`		=	 1		,	\
 					`sv_password`	=	'%s'	,	\
 					`rcon_password`	=	'%s'	,	\
-					`SDR IP`		=	'%s'	,	\
-					`SDR Port`		=	 %d		,	\
-					`SourceTV port`	=	 %d			\
+					`sdr_ip`		=	'%s'	,	\
+					`sdr_port`		=	 %d		,	\
+					`stv_port`	=	 %d			\
 				WHERE								\
-					`Server IP`	=		'%s'		\
+					`ip`	=		'%s'		\
 				AND									\
-					`Server Port`	=	 %d		;",	\
+					`port`	=	 %d		;",	\
 				g_serverPassword, g_rconPassword, g_fakeIP, g_fakePort, g_tvPort, g_publicIP, g_publicPort);
 		}
 		else{
 			db.Format(buffer, sizeof(buffer),
-				"UPDATE	ServerInfo					\
+				"UPDATE	booked					\
 				SET									\
-					`Started`		=	 1		,	\
 					`sv_password`	=	'%s'	,	\
 					`rcon_password`	=	'%s'	,	\
-					`SDR IP`		=	'%s'	,	\
-					`SDR Port`		=	 %d		,	\
-					`Server Port`	=	 %d		,	\
-					`SourceTV port`	=	 %d			\
+					`sdr_ip`		=	'%s'	,	\
+					`sdr_port`		=	 %d		,	\
+					`port`	=	 %d		,	\
+					`stv_port`	=	 %d			\
 				WHERE								\
 					`instance_name` = 	'%s'	;",	\
 				g_serverPassword, g_rconPassword, g_fakeIP, g_fakePort, g_publicPort, g_tvPort, g_instanceName);
@@ -312,11 +266,26 @@ void GetRandomString(char[] buffer, int len){
 	
 	for (int i = 0; i <= len; i++){
 		// Using GetURandomInt is "safer" for random number generation
-		buffer[i] = charList[GetURandomInt() % (sizeof(charList) - 1)];
+		char randomChar;
+		do {
+			randomChar = charList[GetURandomInt() % (sizeof(charList) - 1)];
+		} while (IsCharInArray(randomChar, buffer, i));
+		
+		buffer[i] = randomChar;
 	}
 
 	// Strings need to be null-terminated
 	buffer[len] = '\0';
+}
+
+// Check if a character is already present in an array
+bool IsCharInArray(char c, char[] array, int size) {
+	for (int i = 0; i < size; i++) {
+		if (array[i] == c) {
+			return true;
+		}
+	}
+	return false;
 }
 
 int GetPlayerCount() {
