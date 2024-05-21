@@ -226,7 +226,7 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 					`rcon_password`	=	'%s'	,	\
 					`sdr_ip`		=	'%s'	,	\
 					`sdr_port`		=	 %d		,	\
-					`stv_port`	=	 %d			\
+					`stv_port`	=	 %d		,	\
 					`status` = 'started'		\
 				WHERE								\
 					`ip`	=		'%s'		\
@@ -243,7 +243,7 @@ public void T_SendServerInfoAll(Database db, DBResultSet results, const char[] e
 					`sdr_ip`		=	'%s'	,	\
 					`sdr_port`		=	 %d		,	\
 					`port`	=	 %d		,	\
-					`stv_port`	=	 %d			\
+					`stv_port`	=	 %d		,	\
 					`status` = 'started'		\
 				WHERE								\
 					`instance_name` = 	'%s'	;",	\
